@@ -68,7 +68,7 @@ impl IsoTPFrame {
 
     fn create_ff(&mut self) -> Vec<u8> {
         let mut sf_data: Vec<u8> = Vec::new();
-        sf_data.push(FrameTypeValue::FIRST as u8);
+        sf_data.push(((FrameTypeValue::FIRST as u8) << 4) + (self.size as u8 >> 8));
         sf_data.extend((self.size as u16).to_be_bytes().iter());
         self.data
             .drain(0..FF_DATA_SIZE)
