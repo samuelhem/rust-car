@@ -149,7 +149,7 @@ impl BinaryModel {
     }
 
     pub fn convert_to_array(data: Vec<u8>) -> Aligned<A8, [u8; 8]> {
-        let ret: [u8; 8] = data[0..8].try_into().expect("incorrect length");
+        let ret: [u8; 8] = data.try_into().expect("incorrect length");
         Aligned(ret)
     }
 }

@@ -4,8 +4,9 @@ use cansocket::{BinaryModel, CanFrame, CanSocket};
 use isotp::{IsoTPFrame, IsoTPSocket, UDSFrame};
 mod cansocket;
 mod isotp;
+
 fn main() {
-    let socket = CanSocket::new("vcan0");
+    /*let socket = CanSocket::new("vcan0");
 
     let mut frame = CanFrame::new(0x143, 2);
 
@@ -13,7 +14,7 @@ fn main() {
         .parse::<BinaryModel>()
         .unwrap()
         .convert_to_frame_data();
-
+        */
     /*loop {
     frame.data[1] = frame.data[1] + 1;
     socket.send(&frame);
