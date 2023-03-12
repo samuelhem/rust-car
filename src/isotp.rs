@@ -82,9 +82,12 @@ impl IsoTPFrame {
         sf_data.push(FrameTypeValue::CONSECUTIVE as u8);
         sf_data.push(self.idx);
         self.idx += 1;
-        self.data
-            .drain(0..CF_DATA_SIZE)
-            .for_each(|e| sf_data.push(e));
+        let mut drainsize = CF_DATA_SIZE;
+        if self.data.len() <= CF_DATA_SIZE {
+            drainsize = self.data.len();
+        }
+
+        self.data.drain(0..drainsize).for_each(|e| sf_data.push(e));
 
         return sf_data;
     }
