@@ -47,8 +47,8 @@ pub struct IsoTPFrame {
     idx: u8,
 }
 
-const FF_DATA_SIZE: usize = 6;
-const CF_DATA_SIZE: usize = 7;
+const FF_DATA_SIZE: usize = 5;
+const CF_DATA_SIZE: usize = 6;
 
 impl IsoTPFrame {
     pub fn new(data: Vec<u8>) -> Self {
