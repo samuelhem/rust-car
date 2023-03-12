@@ -111,6 +111,11 @@ impl CanFrame {
             data: Aligned([0; 8]),
         };
     }
+
+    pub fn with_data(mut self, data: Vec<u8>) -> Self {
+        self.data = BinaryModel::convert_to_array(data);
+        return self;
+    }
 }
 
 #[derive(Debug)]
@@ -138,8 +143,13 @@ impl FromStr for BinaryModel {
 }
 
 impl BinaryModel {
-    pub fn return_as_frame(&self) -> Aligned<A8, [u8; 8]> {
+    pub fn convert_to_frame_data(&self) -> Aligned<A8, [u8; 8]> {
         let ret: [u8; 8] = self.bytes[0..8].try_into().expect("incorrect length");
+        Aligned(ret)
+    }
+
+    pub fn convert_to_array(data: Vec<u8>) -> Aligned<A8, [u8; 8]> {
+        let ret: [u8; 8] = data[0..8].try_into().expect("incorrect length");
         Aligned(ret)
     }
 }

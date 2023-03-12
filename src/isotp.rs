@@ -61,7 +61,8 @@ impl<'a> From<FrameType<'a>> for CanFrame {
     fn from(value: FrameType) -> Self {
         match value {
             FrameType::SingleFrame(frame, socket) => {
-                return CanFrame::new(socket.destination_id, frame.size as u8);
+                return CanFrame::new(socket.destination_id, frame.size as u8)
+                    .with_data(frame.data);
             }
             FrameType::FirstFrame(_) => todo!(),
             FrameType::ConsecutiveFrame(_) => todo!(),
