@@ -30,6 +30,17 @@ impl IsoTPSocket {
         }
     }
 
+    pub fn receive(&self) -> IsoTPFrame {
+        //if less than 8 bytes its a SF
+        if let Some(frame) = self.read_from_can() {
+            match frame.size {
+                0..=7 => frame,
+                8..=4095 => return self.continious_receive(frame.into::<FirstFrame>()),
+                _ => return IsoTPFrame::new(Vec::new()),
+            }
+        }
+    }
+
     fn send_on_can(&self, frame: FrameType) {
         if let Ok(_) = self.cansocket.send(&frame.into()) {
             println!("Frame successfully sent");
@@ -83,6 +94,16 @@ impl IsoTPSocket {
         }
     }
 
+    fn continious_receive(&self, ff: FirstFrame) -> IsoTPFrame {
+        let mut frame = IsoTPFrame::new(Vec::new());
+        while frame.size < ff.size as usize {
+
+        }
+
+
+        return _;
+    }
+
     fn next_fc_frame(&self) -> Option<IsoTPFrame> {
         self.read_from_can()
     }
@@ -122,7 +143,7 @@ impl IsoTPFrame {
         }
     }
 
-    fn convert_data_to_sf(&self) -> Vec<u8> {
+    fn create_sf(&self) -> Vec<u8> {
         let mut sf_data: Vec<u8> = Vec::new();
         sf_data.push(((FrameTypeValue::SINGLE as u8) << 4) + self.size as u8);
         self.data.iter().for_each(|e| sf_data.push(*e));
@@ -175,7 +196,7 @@ impl<'a> From<FrameType<'a>> for CanFrame {
         let socket: &IsoTPSocket;
         match value {
             FrameType::SingleFrame(frame, s) => {
-                data = frame.convert_data_to_sf();
+                data = frame.create_sf();
                 socket = s;
             }
             FrameType::FirstFrame(frame, s) => {
@@ -192,7 +213,53 @@ impl<'a> From<FrameType<'a>> for CanFrame {
     }
 }
 
-pub struct FlowControlFrame {
+trait Convertable {
+    fn convert_to_isotp(&self) -> IsoTPFrame;
+}
+
+struct SingleFrame {
+    size: u8,
+    data: Vec<u8>,
+}
+
+struct FirstFrame {
+    size: u16,
+    data: Vec<u8>,
+}
+
+struct ConsecutiveFrame {
+    idx: u8,
+    data: Vec<u8>,
+}
+
+impl From<IsoTPFrame> for SingleFrame {
+    fn from(value: IsoTPFrame) -> Self {
+        return Self {
+            size: value.size as u8,
+            data: value.data,
+        };
+    }
+}
+
+impl From<IsoTPFrame> for FirstFrame {
+    fn from(value: IsoTPFrame) -> Self {
+        return Self {
+            size: value.size as u16,
+            data: value.data,
+        };
+    }
+}
+
+impl From<IsoTPFrame> for ConsecutiveFrame {
+    fn from(value: IsoTPFrame) -> Self {
+        return Self {
+            idx: value.idx,
+            data: value.data,
+        };
+    }
+}
+
+struct FlowControlFrame {
     frame_type: FrameTypeValue,
     transfer_allowed: Option<FlowControlType>,
     block_size: u8,
