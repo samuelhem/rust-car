@@ -5,6 +5,10 @@ use isotp::{IsoTPFrame, IsoTPSocket, UDSFrame};
 mod cansocket;
 mod isotp;
 
+extern crate num;
+#[macro_use]
+extern crate num_derive;
+
 fn main() {
     /*let socket = CanSocket::new("vcan0");
 
