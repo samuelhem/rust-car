@@ -1,3 +1,5 @@
+use std::u8;
+
 use crate::cansocket::{CanFrame, CanSocket};
 
 pub struct IsoTPSocket {
@@ -69,7 +71,7 @@ impl IsoTPFrame {
     fn create_ff(&mut self) -> Vec<u8> {
         let mut sf_data: Vec<u8> = Vec::new();
         sf_data.push(((FrameTypeValue::FIRST as u8) << 4) + (self.size >> 8) as u8);
-        sf_data.extend((self.size as u16).to_be_bytes().iter());
+        sf_data.push(self.size as u8);
         self.data
             .drain(0..FF_DATA_SIZE)
             .for_each(|e| sf_data.push(e));
@@ -79,8 +81,7 @@ impl IsoTPFrame {
 
     fn create_cf(&mut self) -> Vec<u8> {
         let mut sf_data: Vec<u8> = Vec::new();
-        sf_data.push(FrameTypeValue::CONSECUTIVE as u8);
-        sf_data.push(self.idx);
+        sf_data.push(((FrameTypeValue::CONSECUTIVE as u8) << 4) + (self.idx));
         self.idx += 1;
         let mut drainsize = CF_DATA_SIZE;
         if self.data.len() <= CF_DATA_SIZE {
