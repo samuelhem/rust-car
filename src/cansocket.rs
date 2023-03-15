@@ -35,8 +35,6 @@ impl CanSocket {
                 size_of::<SocketAddrCan>(),
             );
         }
-
-        println!("{}", res);
         if res == -1 {
             panic!("Error binding to socket");
         }

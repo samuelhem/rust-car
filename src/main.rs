@@ -1,9 +1,5 @@
-use std::thread::sleep;
-
-use cansocket::{BinaryModel, CanFrame, CanSocket};
-use isotp::{IsoTPFrame, IsoTPSocket, UDSFrame};
-mod cansocket;
-mod isotp;
+use isotp::IsoTPSocket;
+use rust_can_bindings::{isotp, uds::UDSFrame};
 
 extern crate num;
 #[macro_use]
@@ -28,7 +24,10 @@ fn main() {
     }*/
 
     let isotp_socket = IsoTPSocket::new("vcan0", 0x700, 0x600);
-    let frame = UDSFrame::new(0x12);
+    let frame = UDSFrame::new(
+        0x27,
+        String::from("Halloooooo, ich bin ein UDS Frame über ISO-TP und CAN gesendet"),
+    );
 
     isotp_socket.send(frame);
 }

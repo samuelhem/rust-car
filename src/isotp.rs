@@ -3,6 +3,8 @@ use std::{
     time::{self, Duration},
 };
 
+use num_derive::FromPrimitive;
+
 use crate::cansocket::{CanFrame, CanSocket};
 
 pub struct IsoTPSocket {
@@ -30,15 +32,8 @@ impl IsoTPSocket {
         }
     }
 
-    pub fn receive(&self) -> IsoTPFrame {
-        //if less than 8 bytes its a SF
-        if let Some(frame) = self.read_from_can() {
-            match frame.size {
-                0..=7 => frame,
-                8..=4095 => return self.continious_receive(frame.into::<FirstFrame>()),
-                _ => return IsoTPFrame::new(Vec::new()),
-            }
-        }
+    pub fn receive<T: Receivable>(&self) -> T {
+        return T::convert(self.receive_as_isotp());
     }
 
     fn send_on_can(&self, frame: FrameType) {
@@ -73,6 +68,7 @@ impl IsoTPSocket {
                 panic!("shit frame")
             }
 
+            println!("{:?}", fc_frame.transfer_allowed);
             match fc_frame.transfer_allowed {
                 Some(FlowControlType::WAIT) => ct = false,
                 Some(FlowControlType::ABORT) => return,
@@ -83,7 +79,10 @@ impl IsoTPSocket {
             if ct {
                 let mut idx = 0u8;
                 loop {
-                    if idx == fc_frame.block_size && fc_frame.block_size != 0 {
+                    println!("{}", data_frame.data.len());
+                    if idx == fc_frame.block_size && fc_frame.block_size != 0
+                        || data_frame.data.len() <= 0
+                    {
                         break;
                     }
                     thread::sleep(self.calc_sleep_dur(fc_frame.seperation_time));
@@ -94,14 +93,32 @@ impl IsoTPSocket {
         }
     }
 
-    fn continious_receive(&self, ff: FirstFrame) -> IsoTPFrame {
-        let mut frame = IsoTPFrame::new(Vec::new());
-        while frame.size < ff.size as usize {
-
+    pub fn receive_as_isotp(&self) -> IsoTPFrame {
+        //if less than 8 bytes its a SF
+        if let Some(frame) = self.read_from_can() {
+            match frame.size {
+                0..=7 => return frame,
+                8..=4095 => return self.continious_receive(&mut frame.into()),
+                _ => return IsoTPFrame::new(Vec::new()),
+            }
+        } else {
+            todo!()
         }
+    }
 
-
-        return _;
+    fn continious_receive(&self, ff: &mut FirstFrame) -> IsoTPFrame {
+        let cf: IsoTPFrame = FlowControlFrame::new(FlowControlType::CONTINUE as u8, 0, 20).into();
+        let mut fullframe = IsoTPFrame::new(Vec::new());
+        fullframe.data.append(&mut ff.data);
+        self.send_on_can(FrameType::FlowControlFrame(cf, self));
+        while fullframe.data.len() < ff.size as usize {
+            if let Some(frame) = self.read_from_can() {
+                let mut cf: ConsecutiveFrame = frame.into();
+                fullframe.data.append(&mut cf.data);
+            }
+        }
+        fullframe.size = fullframe.data.len();
+        return fullframe;
     }
 
     fn next_fc_frame(&self) -> Option<IsoTPFrame> {
@@ -125,10 +142,11 @@ impl IsoTPSocket {
     }
 }
 
+#[derive(Debug)]
 pub struct IsoTPFrame {
-    data: Vec<u8>,
-    size: usize,
-    idx: u8,
+    pub data: Vec<u8>,
+    pub size: usize,
+    pub idx: u8,
 }
 
 const FF_DATA_SIZE: usize = 5;
@@ -183,6 +201,7 @@ pub enum FrameType<'a> {
     FlowControlFrame(IsoTPFrame, &'a IsoTPSocket),
 }
 
+#[derive(Debug)]
 enum FrameTypeValue {
     SINGLE = 0,
     FIRST = 1,
@@ -207,7 +226,10 @@ impl<'a> From<FrameType<'a>> for CanFrame {
                 data = frame.create_cf();
                 socket = s;
             }
-            FrameType::FlowControlFrame(..) => todo!(),
+            FrameType::FlowControlFrame(frame, s) => {
+                data = frame.data;
+                socket = s;
+            }
         }
         return CanFrame::new(socket.destination_id, data.len() as u8).with_data(data);
     }
@@ -222,6 +244,7 @@ struct SingleFrame {
     data: Vec<u8>,
 }
 
+#[derive(Debug)]
 struct FirstFrame {
     size: u16,
     data: Vec<u8>,
@@ -244,8 +267,8 @@ impl From<IsoTPFrame> for SingleFrame {
 impl From<IsoTPFrame> for FirstFrame {
     fn from(value: IsoTPFrame) -> Self {
         return Self {
-            size: value.size as u16,
-            data: value.data,
+            size: (value.data[0] & 0x0F) as u16 + value.data[1] as u16,
+            data: value.data[2..7].to_vec(),
         };
     }
 }
@@ -253,8 +276,8 @@ impl From<IsoTPFrame> for FirstFrame {
 impl From<IsoTPFrame> for ConsecutiveFrame {
     fn from(value: IsoTPFrame) -> Self {
         return Self {
-            idx: value.idx,
-            data: value.data,
+            idx: value.data[0] & 0x0F,
+            data: value.data[1..7].to_vec(),
         };
     }
 }
@@ -266,15 +289,16 @@ struct FlowControlFrame {
     seperation_time: u8,
 }
 
-#[derive(FromPrimitive)]
+#[derive(FromPrimitive, Debug)]
 enum FlowControlType {
-    CONTINUE = 1,
-    WAIT = 2,
-    ABORT = 3,
+    CONTINUE = 0,
+    WAIT = 1,
+    ABORT = 2,
 }
 
 impl FlowControlFrame {
     pub fn new(transfer_allowed: u8, block_size: u8, seperation_time: u8) -> Self {
+        println!("{}", transfer_allowed);
         Self {
             frame_type: FrameTypeValue::FLOW,
             transfer_allowed: num::FromPrimitive::from_u8(transfer_allowed),
@@ -292,7 +316,19 @@ impl From<CanFrame> for IsoTPFrame {
 
 impl From<IsoTPFrame> for FlowControlFrame {
     fn from(value: IsoTPFrame) -> Self {
-        return FlowControlFrame::new(value.data[0].to_le_bytes()[0], value.data[1], value.data[2]);
+        return FlowControlFrame::new(value.data[0] & 0x0F, value.data[1], value.data[2]);
+    }
+}
+
+impl From<FlowControlFrame> for IsoTPFrame {
+    fn from(value: FlowControlFrame) -> Self {
+        let mut fc_data: Vec<u8> = Vec::new();
+
+        fc_data.push(((value.frame_type as u8) << 4) + (value.transfer_allowed.unwrap() as u8));
+        fc_data.push(value.block_size);
+        fc_data.push(value.seperation_time);
+
+        return IsoTPFrame::new(fc_data);
     }
 }
 
@@ -300,20 +336,6 @@ pub trait Sendable {
     fn convert(&self) -> Vec<u8>;
 }
 
-pub struct UDSFrame {
-    service_id: u32,
-}
-
-impl UDSFrame {
-    pub fn new(service_id: u32) -> Self {
-        Self { service_id }
-    }
-}
-
-impl Sendable for UDSFrame {
-    fn convert(&self) -> Vec<u8> {
-        vec![
-            1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 123, 123, 1, 66, 88, 99, 213, 12, 12,
-        ]
-    }
+pub trait Receivable {
+    fn convert(f: IsoTPFrame) -> Self;
 }
